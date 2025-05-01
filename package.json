@@ -1,0 +1,25 @@
+{
+  "name": "pr-github-app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tegnike/pr-github-app.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tegnike/pr-github-app/issues"
+  },
+  "homepage": "https://github.com/tegnike/pr-github-app#readme",
+  "description": "",
+  "dependencies": {
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0",
+    "probot": "^13.4.5"
+  }
+}
