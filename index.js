@@ -11,6 +11,40 @@ module.exports = (app) => {
   app.on("issue_comment.created", async (context) => {
     app.log.info("Issue comment created event received");
 
+    // コメント投稿者を取得
+    const commentUser = context.payload.comment.user.login;
+    app.log.info({ commentUser }, "Comment created by");
+
+    // 特定のユーザーからのコメントか確認 (環境変数が設定されている場合)
+    const targetGitHubUser = process.env.TARGET_GITHUB_USER;
+    if (targetGitHubUser && commentUser !== targetGitHubUser) {
+      app.log.info(`Comment user (${commentUser}) does not match target user (${targetGitHubUser}), skipping.`);
+      return;
+    } else if (targetGitHubUser) {
+      app.log.info(`Comment user (${commentUser}) matches target user (${targetGitHubUser}), proceeding.`);
+    } else {
+      app.log.info("TARGET_GITHUB_USER not set, processing comment from any user.");
+    }
+
+    // コメント本文を取得
+    const commentBody = context.payload.comment.body;
+    app.log.debug({ commentBody }, "Comment body");
+
+    // コメント本文が特定のパターンを含むかチェック
+    const actionableMatch = commentBody ? commentBody.match(/Actionable comments posted: (\d+)/) : null;
+    if (!actionableMatch || !actionableMatch[1]) {
+      app.log.info("Comment does not contain 'Actionable comments posted: N', skipping.");
+      return;
+    }
+
+    const actionableCount = parseInt(actionableMatch[1], 10);
+    if (isNaN(actionableCount) || actionableCount <= 0) {
+      app.log.info(`Actionable comments count (${actionableMatch[1]}) is not greater than 0, skipping.`);
+      return;
+    }
+
+    app.log.info(`Found actionable comments count: ${actionableCount}, proceeding.`);
+
     // コメントがPRに関連しているか確認
     if (!context.payload.issue.pull_request) {
       app.log.info("Comment is not on a pull request, skipping.");
@@ -30,6 +64,19 @@ module.exports = (app) => {
     }
     const threadTs = threadTsMatch[1];
     app.log.info({ threadTs }, "Found slack_thread_ts");
+
+    // threadTs をフォーマット (XXXXXXXXXX.YYYYYY)
+    let formattedTs = threadTs;
+    if (formattedTs && /^\\d{16}$/.test(formattedTs)) { // 16桁の数字かチェック
+      formattedTs = formattedTs.substring(0, 10) + '.' + formattedTs.substring(10);
+      app.log.info({ originalTs: threadTs, formattedTs }, "Formatted slack_thread_ts");
+    } else if (formattedTs && formattedTs.includes('.')) {
+        app.log.info({ threadTs }, "slack_thread_ts already contains '.', using as is.");
+    } else if (formattedTs) {
+        // 16桁数字でもなく、ピリオドも含まない場合 (予期せぬ形式)
+        app.log.warn({ threadTs }, "Unexpected format for slack_thread_ts, using as is.");
+    }
+    // formattedTsがnullやundefinedの場合はそのまま (上のチェックでthreadTsMatchがあることは保証されている)
 
     // コメントのURLを取得
     const commentUrl = context.payload.comment.html_url;
@@ -55,7 +102,7 @@ module.exports = (app) => {
     const payload = {
       channel: slackChannelId,
       text: messageText,
-      thread_ts: threadTs // 抽出したthread_tsをセット
+      thread_ts: formattedTs // フォーマット済みのthread_tsを使用
     };
 
     try {
